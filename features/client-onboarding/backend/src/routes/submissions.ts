@@ -42,8 +42,10 @@ submissionsRoutes.get('/', async (c) => {
       rows = rawData as Array<Record<string, unknown>>
       meta = undefined
     } else if (rawData && typeof rawData === 'object' && 'data' in rawData) {
-      const envelope = rawData as { data: unknown[]; meta?: Record<string, unknown> }
-      rows = (envelope.data as Array<Record<string, unknown>>) ?? []
+      const envelope = rawData as { data?: unknown; meta?: Record<string, unknown> }
+      rows = Array.isArray(envelope.data)
+        ? (envelope.data as Array<Record<string, unknown>>)
+        : []
       meta = envelope.meta
     } else {
       rows = []
