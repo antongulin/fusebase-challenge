@@ -1,0 +1,44 @@
+{
+  "orgId": "u263ad",
+  "appId": "87dhtbudt9lmtume",
+  "env": "prod",
+  "features": [
+    {
+      "id": "f0v61iqylegtjzuv",
+      "path": "features/client-onboarding",
+      "dev": {
+        "command": "npm run dev"
+      },
+      "build": {
+        "command": "npm run build",
+        "outputDir": "dist"
+      },
+      "backend": {
+        "dev": {
+          "command": "npm run dev"
+        },
+        "build": {
+          "command": "npm run build"
+        },
+        "start": {
+          "command": "npm run start"
+        }
+      },
+      "fusebaseGateMeta": {
+        "sdkVersion": "2.2.2-sdk.16",
+        "analyzedAt": "2026-04-04T03:12:51.976Z",
+        "usedOpsChangedAt": "2026-04-04T03:12:51.976Z",
+        "permissionsChangedAt": "2026-04-04T03:12:51.978Z",
+        "usedOps": [
+          "addOrgUser",
+          "sendOrgEmail"
+        ],
+        "permissions": [
+          "email.write",
+          "org.members.write"
+        ]
+      }
+    }
+  ],
+  "firstFeatureSub": "client-onboarding"
+}

@@ -1,0 +1,18 @@
+node_modules/
+dist/
+*.log
+logs/
+
+# Environment (sensitive: tokens)
+.env
+
+# MCP config (sensitive: URL and token)
+.cursor/mcp.json
+.vscode/mcp.json
+.mcp.json
+opencode.json
+mcp_example.json
+.codex/config.toml
+
+# Serena
+.serena/
