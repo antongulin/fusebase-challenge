@@ -13,6 +13,7 @@
     "@fusebase/fusebase-gate-sdk": "^2.2.2-sdk.10",
     "@hono/node-server": "^1.13.0",
     "hono": "^4.6.0",
+    "resend": "^6.10.0",
     "textlink-sms": "^0.0.3"
   },
   "devDependencies": {
