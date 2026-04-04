@@ -1,22 +1,40 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { apiFetch } from '../lib/auth'
 import { Submission } from '../lib/types'
 import { STATUS_LABELS } from '../lib/constants'
-import { ArrowLeft, ExternalLink, Building2, User, MapPin, Target, Globe, Briefcase } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Building2, User, MapPin, Target, Globe, Briefcase, Trash2 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 const STATUS_NAME: Record<string, string> = Object.fromEntries(
   Object.entries(STATUS_LABELS).map(([key, nanoid]) => [nanoid, key])
 )
 
+const STATUS_DISPLAY: Record<string, string> = {
+  new: 'New',
+  underReview: 'Under Review',
+  workspaceCreated: 'Workspace Created',
+  active: 'Active',
+  rejected: 'Rejected',
+}
+
+const STATUS_OPTIONS = Object.keys(STATUS_LABELS).map((key) => ({
+  key,
+  label: STATUS_DISPLAY[key] || key,
+}))
+
 export default function AdminDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [submission, setSubmission] = useState<Submission | null>(null)
   const [loading, setLoading] = useState(true)
   const [workspaceId, setWorkspaceId] = useState('')
+  const [workspaces, setWorkspaces] = useState<{ id: string; title?: string | null; isDefault: boolean }[]>([])
+  const [workspacesLoaded, setWorkspacesLoaded] = useState(false)
   const [setupLoading, setSetupLoading] = useState(false)
   const [setupDone, setSetupDone] = useState(false)
+  const [statusLoading, setStatusLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   useEffect(() => {
     apiFetch<{ submissions: Submission[] }>('/api/submissions')
@@ -28,6 +46,10 @@ export default function AdminDetailPage() {
         }
       })
       .finally(() => setLoading(false))
+    apiFetch<{ workspaces: { id: string; title?: string | null; isDefault: boolean }[] }>('/api/submissions/workspaces')
+      .then((data) => setWorkspaces(data.workspaces))
+      .catch((err) => console.error('Failed to load workspaces:', err))
+      .finally(() => setWorkspacesLoaded(true))
   }, [id])
 
   const handleSetup = async () => {
@@ -39,10 +61,47 @@ export default function AdminDetailPage() {
         body: JSON.stringify({ workspaceId: workspaceId.trim() }),
       })
       setSetupDone(true)
+      setSubmission((prev) => prev ? {
+        ...prev,
+        workspaceId: workspaceId.trim(),
+        status: [STATUS_LABELS.workspaceCreated],
+      } : prev)
     } catch {
       // error handled by apiFetch
     } finally {
       setSetupLoading(false)
+    }
+  }
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!id) return
+    setStatusLoading(true)
+    try {
+      await apiFetch(`/api/submissions/${id}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status: newStatus }),
+      })
+      setSubmission((prev) => prev ? {
+        ...prev,
+        status: [STATUS_LABELS[newStatus as keyof typeof STATUS_LABELS]],
+      } : prev)
+    } catch {
+      // error handled by apiFetch
+    } finally {
+      setStatusLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!id || !confirm('Delete this submission? This cannot be undone.')) return
+    setDeleteLoading(true)
+    try {
+      await apiFetch(`/api/submissions/${id}`, { method: 'DELETE' })
+      navigate('/admin')
+    } catch {
+      // error handled by apiFetch
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -79,16 +138,37 @@ export default function AdminDetailPage() {
               Submitted {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString() : '—'}
             </p>
           </div>
-          <span className={cn(
-            'px-3 py-1 rounded-full text-xs font-medium',
-            statusKey === 'new' && 'bg-blue-100 text-blue-800',
-            statusKey === 'underReview' && 'bg-amber-100 text-amber-800',
-            statusKey === 'workspaceCreated' && 'bg-purple-100 text-purple-800',
-            statusKey === 'active' && 'bg-green-100 text-green-800',
-            statusKey === 'rejected' && 'bg-red-100 text-red-800',
-          )}>
-            {statusKey.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())}
-          </span>
+          <div className="flex items-center gap-3">
+            <select
+              aria-label="Submission status"
+              value={statusKey}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              disabled={statusLoading}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-medium border cursor-pointer',
+                'focus:outline-none focus:ring-2 focus:ring-primary/30',
+                statusKey === 'new' && 'bg-blue-100 text-blue-800 border-blue-200',
+                statusKey === 'underReview' && 'bg-amber-100 text-amber-800 border-amber-200',
+                statusKey === 'workspaceCreated' && 'bg-purple-100 text-purple-800 border-purple-200',
+                statusKey === 'active' && 'bg-green-100 text-green-800 border-green-200',
+                statusKey === 'rejected' && 'bg-red-100 text-red-800 border-red-200',
+                statusLoading && 'opacity-50',
+              )}
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.key} value={opt.key}>{opt.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleDelete}
+              disabled={deleteLoading}
+              className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Delete submission"
+              title="Delete submission"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -127,8 +207,8 @@ export default function AdminDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-1">
               <InfoRow label="GBP" value={submission.gbpUrl?.url} link />
               <InfoRow label="Facebook" value={submission.facebookUrl?.url} link />
-              <InfoRow label="Instagram" value={submission.instagramHandle ? '@' + submission.instagramHandle : ''} />
-              <InfoRow label="TikTok" value={submission.tiktokHandle ? '@' + submission.tiktokHandle : ''} />
+              <InfoRow label="Instagram" value={submission.instagramHandle ? '@' + submission.instagramHandle : ''} href={submission.instagramHandle ? `https://instagram.com/${submission.instagramHandle}` : undefined} />
+              <InfoRow label="TikTok" value={submission.tiktokHandle ? '@' + submission.tiktokHandle : ''} href={submission.tiktokHandle ? `https://tiktok.com/@${submission.tiktokHandle}` : undefined} />
               <InfoRow label="LinkedIn" value={submission.linkedinUrl?.url} link />
               <InfoRow label="YouTube" value={submission.youtubeUrl?.url} link />
               <InfoRow label="Other" value={submission.otherSocialLinks} />
@@ -151,34 +231,56 @@ export default function AdminDetailPage() {
         {/* Workspace Association */}
         {!setupDone && statusKey !== 'workspaceCreated' && statusKey !== 'active' && (
           <div className="mt-6 border border-primary/30 bg-primary/5 rounded-lg p-6">
-            <h3 className="font-semibold mb-2">Set Up Workspace</h3>
+            <h3 className="font-semibold mb-2">Associate Workspace</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Create a workspace for this client in Fusebase (just type the business name), then paste the workspace ID here.
+              Select an existing Fusebase workspace to associate with this client.
+              {workspacesLoaded && workspaces.length === 0 && ' No workspaces found — create one in Fusebase first.'}
+              {!workspacesLoaded && ' Loading workspaces...'}
             </p>
             <div className="flex gap-3">
-              <input
-                type="text"
-                placeholder="Paste workspace ID..."
-                value={workspaceId}
-                onChange={(e) => setWorkspaceId(e.target.value)}
-                className="flex-1 px-3 py-2.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
+              {workspaces.length > 0 ? (
+                <select
+                  aria-label="Select workspace"
+                  value={workspaceId}
+                  onChange={(e) => setWorkspaceId(e.target.value)}
+                  className="flex-1 px-3 py-2.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-background"
+                >
+                  <option value="">Select a workspace...</option>
+                  {workspaces.map((ws) => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.title || ws.id}{ws.isDefault ? ' (default)' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="Paste workspace ID..."
+                  value={workspaceId}
+                  onChange={(e) => setWorkspaceId(e.target.value)}
+                  className="flex-1 px-3 py-2.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              )}
               <button
                 onClick={handleSetup}
                 disabled={setupLoading || !workspaceId.trim()}
                 className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
               >
-                {setupLoading ? 'Saving...' : 'Associate Workspace'}
+                {setupLoading ? 'Saving...' : 'Associate'}
               </button>
             </div>
           </div>
         )}
 
         {(setupDone || statusKey === 'workspaceCreated' || statusKey === 'active') && (
-          <div className="mt-6 border border-success/30 bg-success/5 rounded-lg p-6">
-            <h3 className="font-semibold text-success mb-1">Workspace Associated</h3>
+          <div className="mt-6 border border-green-500/30 bg-green-500/5 rounded-lg p-6">
+            <h3 className="font-semibold text-green-700 mb-1">Workspace Associated</h3>
             <p className="text-sm text-muted-foreground">
-              Workspace ID: {workspaceId || submission.workspaceId}
+              {(() => {
+                const wsId = workspaceId || submission.workspaceId
+                const ws = workspaces.find((w) => w.id === wsId)
+                return ws ? `${ws.title || 'Untitled'} (${wsId})` : wsId
+              })()}
             </p>
           </div>
         )}
@@ -204,13 +306,25 @@ function InfoCard({ icon: Icon, title, children, className }: {
   )
 }
 
-function InfoRow({ label, value, link }: { label: string; value?: string | null; link?: boolean }) {
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, 'https://placeholder.invalid')
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+function InfoRow({ label, value, link, href }: { label: string; value?: string | null; link?: boolean; href?: string }) {
   if (!value) return null
+  const isLink = link || !!href
+  const url = href || value
+  const safeLink = isLink && isSafeUrl(url)
   return (
     <div className="flex gap-2 text-sm">
       <span className="text-muted-foreground whitespace-nowrap">{label}:</span>
-      {link ? (
-        <a href={value} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 break-all">
+      {safeLink ? (
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 break-all">
           {value} <ExternalLink className="w-3 h-3 flex-shrink-0" />
         </a>
       ) : (

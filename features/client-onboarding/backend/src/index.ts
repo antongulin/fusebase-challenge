@@ -9,6 +9,8 @@ const app = new Hono().basePath('/api')
 
 app.use('*', cors())
 
+app.get('/health', (c) => c.json({ ok: true }))
+
 // Auth middleware: extract feature token
 app.use('*', async (c, next) => {
   const featureToken =
@@ -21,8 +23,6 @@ app.use('*', async (c, next) => {
   c.set('featureToken' as never, featureToken as never)
   await next()
 })
-
-app.get('/health', (c) => c.json({ ok: true }))
 
 app.route('/onboard', onboardRoutes)
 app.route('/submissions', submissionsRoutes)

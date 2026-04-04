@@ -1,31 +1,56 @@
 import { Hono } from 'hono'
 import {
-  createDashboardDataApi,
+  createAdminDashboardDataApi,
+  createAdminRowsApi,
+  createAdminWorkspacesApi,
   ONBOARDING_DASHBOARD_ID,
   ONBOARDING_VIEW_ID,
+  ORG_ID,
   COL,
   STATUS_LABELS,
 } from '../sdk.js'
 
 export const submissionsRoutes = new Hono()
 
+// Admin auth: require ADMIN_SECRET header for all submission routes
+submissionsRoutes.use('*', async (c, next) => {
+  const adminSecret = process.env.ADMIN_SECRET
+  if (adminSecret && c.req.header('x-admin-secret') !== adminSecret) {
+    return c.json({ error: 'Unauthorized' }, 403)
+  }
+  await next()
+})
+
 // List all submissions
 submissionsRoutes.get('/', async (c) => {
-  const featureToken = c.get('featureToken' as never) as string
   const page = Number(c.req.query('page') || '1')
   const limit = Number(c.req.query('limit') || '50')
 
-  const dashboardApi = createDashboardDataApi(featureToken)
-
   try {
+    const dashboardApi = createAdminDashboardDataApi()
     const result = await dashboardApi.getDashboardViewData({
       path: { dashboardId: ONBOARDING_DASHBOARD_ID, viewId: ONBOARDING_VIEW_ID },
       query: { page, limit },
     })
 
-    const responseData = result.data as unknown as Record<string, unknown> | undefined
-    const rows = (responseData?.data as Array<Record<string, unknown>>) || []
-    const meta = responseData?.meta as Record<string, unknown> | undefined
+    // Handle both SDK shapes: direct array or { data: row[], meta } envelope
+    const rawData = result.data as unknown
+    let rows: Array<Record<string, unknown>>
+    let meta: Record<string, unknown> | undefined
+
+    if (Array.isArray(rawData)) {
+      rows = rawData as Array<Record<string, unknown>>
+      meta = undefined
+    } else if (rawData && typeof rawData === 'object' && 'data' in rawData) {
+      const envelope = rawData as { data?: unknown; meta?: Record<string, unknown> }
+      rows = Array.isArray(envelope.data)
+        ? (envelope.data as Array<Record<string, unknown>>)
+        : []
+      meta = envelope.meta
+    } else {
+      rows = []
+      meta = undefined
+    }
 
     const submissions = rows.map((row) => ({
       id: row.root_index_value as string,
@@ -66,14 +91,13 @@ submissionsRoutes.get('/', async (c) => {
 
     return c.json({ submissions, meta })
   } catch (err) {
-    console.error('Failed to fetch submissions:', err)
+    console.error('[submissions] Failed to fetch submissions:', err)
     return c.json({ error: 'Failed to fetch submissions' }, 500)
   }
 })
 
 // Update submission (workspace association, status change)
 submissionsRoutes.post('/:id/setup', async (c) => {
-  const featureToken = c.get('featureToken' as never) as string
   const id = c.req.param('id')
   const body = await c.req.json<{ workspaceId: string; notes?: string }>()
 
@@ -81,9 +105,8 @@ submissionsRoutes.post('/:id/setup', async (c) => {
     return c.json({ error: 'workspaceId is required' }, 400)
   }
 
-  const dashboardApi = createDashboardDataApi(featureToken)
-
   try {
+    const dashboardApi = createAdminDashboardDataApi()
     await dashboardApi.batchPutDashboardData({
       path: { dashboardId: ONBOARDING_DASHBOARD_ID, viewId: ONBOARDING_VIEW_ID },
       body: {
@@ -99,14 +122,13 @@ submissionsRoutes.post('/:id/setup', async (c) => {
 
     return c.json({ success: true, status: 'workspace_created' })
   } catch (err) {
-    console.error('Failed to update submission:', err)
+    console.error('[submissions] Failed to update submission:', err)
     return c.json({ error: 'Failed to update submission' }, 500)
   }
 })
 
 // Update submission status
 submissionsRoutes.post('/:id/status', async (c) => {
-  const featureToken = c.get('featureToken' as never) as string
   const id = c.req.param('id')
   const body = await c.req.json<{ status: keyof typeof STATUS_LABELS }>()
 
@@ -115,9 +137,8 @@ submissionsRoutes.post('/:id/status', async (c) => {
     return c.json({ error: 'Invalid status' }, 400)
   }
 
-  const dashboardApi = createDashboardDataApi(featureToken)
-
   try {
+    const dashboardApi = createAdminDashboardDataApi()
     await dashboardApi.batchPutDashboardData({
       path: { dashboardId: ONBOARDING_DASHBOARD_ID, viewId: ONBOARDING_VIEW_ID },
       body: {
@@ -130,7 +151,37 @@ submissionsRoutes.post('/:id/status', async (c) => {
 
     return c.json({ success: true })
   } catch (err) {
-    console.error('Failed to update status:', err)
+    console.error('[submissions] Failed to update status:', err)
     return c.json({ error: 'Failed to update status' }, 500)
+  }
+})
+
+// Delete submission
+submissionsRoutes.delete('/:id', async (c) => {
+  const id = c.req.param('id')
+
+  try {
+    const rowsApi = createAdminRowsApi()
+    await rowsApi.deleteDashboardRow({
+      path: { dashboardId: ONBOARDING_DASHBOARD_ID, rowUuid: id },
+    })
+    return c.json({ success: true })
+  } catch (err) {
+    console.error('[submissions] Failed to delete submission:', err)
+    return c.json({ error: 'Failed to delete submission' }, 500)
+  }
+})
+
+// List org workspaces for admin dropdown
+submissionsRoutes.get('/workspaces', async (c) => {
+  try {
+    const workspacesApi = createAdminWorkspacesApi()
+    const result = await workspacesApi.listWorkspaces({
+      path: { orgId: ORG_ID },
+    })
+    return c.json({ workspaces: result.workspaces ?? [] })
+  } catch (err) {
+    console.error('[workspaces] Failed to list:', err)
+    return c.json({ error: 'Failed to list workspaces' }, 500)
   }
 })

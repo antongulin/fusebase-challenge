@@ -1,11 +1,13 @@
 import {
   createClient,
+  CustomDashboardRowsApi,
   DashboardDataApi,
 } from '@fusebase/dashboard-service-sdk'
 import {
   createClient as createGateClient,
   OrgUsersApi,
   EmailsApi,
+  WorkspacesApi,
 } from '@fusebase/fusebase-gate-sdk'
 
 const DASHBOARD_BASE_URL = 'https://app-api.thefusebase.com/v4/api/proxy/dashboard-service/v1'
@@ -17,6 +19,25 @@ export function createDashboardDataApi(featureToken: string): DashboardDataApi {
     defaultHeaders: { 'x-app-feature-token': featureToken },
   })
   return new DashboardDataApi(client)
+}
+
+function createAdminDashboardClient() {
+  const serviceToken = process.env.DASHBOARD_SERVICE_TOKEN
+  if (!serviceToken) {
+    throw new Error('DASHBOARD_SERVICE_TOKEN not configured')
+  }
+  return createClient({
+    baseUrl: DASHBOARD_BASE_URL,
+    defaultHeaders: { 'Authorization': `Bearer ${serviceToken}` },
+  })
+}
+
+export function createAdminDashboardDataApi(): DashboardDataApi {
+  return new DashboardDataApi(createAdminDashboardClient())
+}
+
+export function createAdminRowsApi(): CustomDashboardRowsApi {
+  return new CustomDashboardRowsApi(createAdminDashboardClient())
 }
 
 export function createOrgUsersApi(featureToken: string): OrgUsersApi {
@@ -33,6 +54,18 @@ export function createEmailsApi(featureToken: string): EmailsApi {
     defaultHeaders: { 'x-app-feature-token': featureToken },
   })
   return new EmailsApi(client)
+}
+
+export function createAdminWorkspacesApi(): WorkspacesApi {
+  const serviceToken = process.env.GATE_SERVICE_TOKEN
+  if (!serviceToken) {
+    throw new Error('GATE_SERVICE_TOKEN not configured')
+  }
+  const client = createGateClient({
+    baseUrl: GATE_BASE_URL,
+    defaultHeaders: { 'Authorization': `Bearer ${serviceToken}` },
+  })
+  return new WorkspacesApi(client)
 }
 
 // Constants from MCP discovery
