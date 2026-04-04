@@ -10,14 +10,22 @@ import {
 
 export const submissionsRoutes = new Hono()
 
+// Admin auth: require ADMIN_SECRET header for all submission routes
+submissionsRoutes.use('*', async (c, next) => {
+  const adminSecret = process.env.ADMIN_SECRET
+  if (adminSecret && c.req.header('x-admin-secret') !== adminSecret) {
+    return c.json({ error: 'Unauthorized' }, 403)
+  }
+  await next()
+})
+
 // List all submissions
 submissionsRoutes.get('/', async (c) => {
   const page = Number(c.req.query('page') || '1')
   const limit = Number(c.req.query('limit') || '50')
 
-  const dashboardApi = createAdminDashboardDataApi()
-
   try {
+    const dashboardApi = createAdminDashboardDataApi()
     const result = await dashboardApi.getDashboardViewData({
       path: { dashboardId: ONBOARDING_DASHBOARD_ID, viewId: ONBOARDING_VIEW_ID },
       query: { page, limit },
@@ -39,7 +47,6 @@ submissionsRoutes.get('/', async (c) => {
       rows = []
       meta = undefined
     }
-    console.log(`[submissions] Fetched ${rows.length} rows`)
 
     const submissions = rows.map((row) => ({
       id: row.root_index_value as string,
@@ -80,8 +87,7 @@ submissionsRoutes.get('/', async (c) => {
 
     return c.json({ submissions, meta })
   } catch (err) {
-    const errObj = err as { message?: string }
-    console.error(`[submissions] Failed to fetch: ${errObj.message}`)
+    console.error('[submissions] Failed to fetch submissions:', err)
     return c.json({ error: 'Failed to fetch submissions' }, 500)
   }
 })
@@ -95,9 +101,8 @@ submissionsRoutes.post('/:id/setup', async (c) => {
     return c.json({ error: 'workspaceId is required' }, 400)
   }
 
-  const dashboardApi = createAdminDashboardDataApi()
-
   try {
+    const dashboardApi = createAdminDashboardDataApi()
     await dashboardApi.batchPutDashboardData({
       path: { dashboardId: ONBOARDING_DASHBOARD_ID, viewId: ONBOARDING_VIEW_ID },
       body: {
@@ -113,7 +118,7 @@ submissionsRoutes.post('/:id/setup', async (c) => {
 
     return c.json({ success: true, status: 'workspace_created' })
   } catch (err) {
-    console.error('Failed to update submission:', err)
+    console.error('[submissions] Failed to update submission:', err)
     return c.json({ error: 'Failed to update submission' }, 500)
   }
 })
@@ -128,9 +133,8 @@ submissionsRoutes.post('/:id/status', async (c) => {
     return c.json({ error: 'Invalid status' }, 400)
   }
 
-  const dashboardApi = createAdminDashboardDataApi()
-
   try {
+    const dashboardApi = createAdminDashboardDataApi()
     await dashboardApi.batchPutDashboardData({
       path: { dashboardId: ONBOARDING_DASHBOARD_ID, viewId: ONBOARDING_VIEW_ID },
       body: {
@@ -143,7 +147,7 @@ submissionsRoutes.post('/:id/status', async (c) => {
 
     return c.json({ success: true })
   } catch (err) {
-    console.error('Failed to update status:', err)
+    console.error('[submissions] Failed to update status:', err)
     return c.json({ error: 'Failed to update status' }, 500)
   }
 })
@@ -151,15 +155,15 @@ submissionsRoutes.post('/:id/status', async (c) => {
 // Delete submission
 submissionsRoutes.delete('/:id', async (c) => {
   const id = c.req.param('id')
-  const rowsApi = createAdminRowsApi()
 
   try {
+    const rowsApi = createAdminRowsApi()
     await rowsApi.deleteDashboardRow({
       path: { dashboardId: ONBOARDING_DASHBOARD_ID, rowUuid: id },
     })
     return c.json({ success: true })
   } catch (err) {
-    console.error('Failed to delete submission:', err)
+    console.error('[submissions] Failed to delete submission:', err)
     return c.json({ error: 'Failed to delete submission' }, 500)
   }
 })

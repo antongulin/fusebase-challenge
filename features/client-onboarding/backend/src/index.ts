@@ -17,8 +17,6 @@ app.use('*', async (c, next) => {
   const featureToken =
     c.req.header('x-app-feature-token') || getCookie(c, 'fbsfeaturetoken')
 
-  console.log(`[${c.req.method}] ${c.req.path} — token: ${featureToken ? 'present' : 'MISSING'}`)
-
   if (!featureToken) {
     return c.json({ error: 'Missing feature token' }, 401)
   }
