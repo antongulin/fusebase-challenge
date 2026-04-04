@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import {
   createAdminDashboardDataApi,
+  createAdminRowsApi,
   ONBOARDING_DASHBOARD_ID,
   ONBOARDING_VIEW_ID,
   COL,
@@ -144,5 +145,21 @@ submissionsRoutes.post('/:id/status', async (c) => {
   } catch (err) {
     console.error('Failed to update status:', err)
     return c.json({ error: 'Failed to update status' }, 500)
+  }
+})
+
+// Delete submission
+submissionsRoutes.delete('/:id', async (c) => {
+  const id = c.req.param('id')
+  const rowsApi = createAdminRowsApi()
+
+  try {
+    await rowsApi.deleteDashboardRow({
+      path: { dashboardId: ONBOARDING_DASHBOARD_ID, rowUuid: id },
+    })
+    return c.json({ success: true })
+  } catch (err) {
+    console.error('Failed to delete submission:', err)
+    return c.json({ error: 'Failed to delete submission' }, 500)
   }
 })

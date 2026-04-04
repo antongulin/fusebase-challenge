@@ -1,5 +1,6 @@
 import {
   createClient,
+  CustomDashboardRowsApi,
   DashboardDataApi,
 } from '@fusebase/dashboard-service-sdk'
 import {
@@ -33,6 +34,18 @@ export function createAdminDashboardDataApi(): DashboardDataApi {
     defaultHeaders: { 'Authorization': `Bearer ${serviceToken}` },
   })
   return new DashboardDataApi(client)
+}
+
+export function createAdminRowsApi(): CustomDashboardRowsApi {
+  const serviceToken = process.env.DASHBOARD_SERVICE_TOKEN
+  if (!serviceToken) {
+    throw new Error('DASHBOARD_SERVICE_TOKEN not configured')
+  }
+  const client = createClient({
+    baseUrl: DASHBOARD_BASE_URL,
+    defaultHeaders: { 'Authorization': `Bearer ${serviceToken}` },
+  })
+  return new CustomDashboardRowsApi(client)
 }
 
 export function createOrgUsersApi(featureToken: string): OrgUsersApi {

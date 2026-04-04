@@ -1,22 +1,33 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { apiFetch } from '../lib/auth'
 import { Submission } from '../lib/types'
 import { STATUS_LABELS } from '../lib/constants'
-import { ArrowLeft, ExternalLink, Building2, User, MapPin, Target, Globe, Briefcase } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Building2, User, MapPin, Target, Globe, Briefcase, Trash2 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 const STATUS_NAME: Record<string, string> = Object.fromEntries(
   Object.entries(STATUS_LABELS).map(([key, nanoid]) => [nanoid, key])
 )
 
+const STATUS_OPTIONS: { key: string; label: string }[] = [
+  { key: 'new', label: 'New' },
+  { key: 'underReview', label: 'Under Review' },
+  { key: 'workspaceCreated', label: 'Workspace Created' },
+  { key: 'active', label: 'Active' },
+  { key: 'rejected', label: 'Rejected' },
+]
+
 export default function AdminDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [submission, setSubmission] = useState<Submission | null>(null)
   const [loading, setLoading] = useState(true)
   const [workspaceId, setWorkspaceId] = useState('')
   const [setupLoading, setSetupLoading] = useState(false)
   const [setupDone, setSetupDone] = useState(false)
+  const [statusLoading, setStatusLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   useEffect(() => {
     apiFetch<{ submissions: Submission[] }>('/api/submissions')
@@ -43,6 +54,38 @@ export default function AdminDetailPage() {
       // error handled by apiFetch
     } finally {
       setSetupLoading(false)
+    }
+  }
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!id) return
+    setStatusLoading(true)
+    try {
+      await apiFetch(`/api/submissions/${id}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status: newStatus }),
+      })
+      setSubmission((prev) => prev ? {
+        ...prev,
+        status: [STATUS_LABELS[newStatus as keyof typeof STATUS_LABELS]],
+      } : prev)
+    } catch {
+      // error handled by apiFetch
+    } finally {
+      setStatusLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!id || !confirm('Delete this submission? This cannot be undone.')) return
+    setDeleteLoading(true)
+    try {
+      await apiFetch(`/api/submissions/${id}`, { method: 'DELETE' })
+      navigate('/admin')
+    } catch {
+      // error handled by apiFetch
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -79,16 +122,35 @@ export default function AdminDetailPage() {
               Submitted {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString() : '—'}
             </p>
           </div>
-          <span className={cn(
-            'px-3 py-1 rounded-full text-xs font-medium',
-            statusKey === 'new' && 'bg-blue-100 text-blue-800',
-            statusKey === 'underReview' && 'bg-amber-100 text-amber-800',
-            statusKey === 'workspaceCreated' && 'bg-purple-100 text-purple-800',
-            statusKey === 'active' && 'bg-green-100 text-green-800',
-            statusKey === 'rejected' && 'bg-red-100 text-red-800',
-          )}>
-            {statusKey.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())}
-          </span>
+          <div className="flex items-center gap-3">
+            <select
+              value={statusKey}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              disabled={statusLoading}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-medium border cursor-pointer',
+                'focus:outline-none focus:ring-2 focus:ring-primary/30',
+                statusKey === 'new' && 'bg-blue-100 text-blue-800 border-blue-200',
+                statusKey === 'underReview' && 'bg-amber-100 text-amber-800 border-amber-200',
+                statusKey === 'workspaceCreated' && 'bg-purple-100 text-purple-800 border-purple-200',
+                statusKey === 'active' && 'bg-green-100 text-green-800 border-green-200',
+                statusKey === 'rejected' && 'bg-red-100 text-red-800 border-red-200',
+                statusLoading && 'opacity-50',
+              )}
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.key} value={opt.key}>{opt.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleDelete}
+              disabled={deleteLoading}
+              className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
+              title="Delete submission"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -127,8 +189,8 @@ export default function AdminDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-1">
               <InfoRow label="GBP" value={submission.gbpUrl?.url} link />
               <InfoRow label="Facebook" value={submission.facebookUrl?.url} link />
-              <InfoRow label="Instagram" value={submission.instagramHandle ? '@' + submission.instagramHandle : ''} />
-              <InfoRow label="TikTok" value={submission.tiktokHandle ? '@' + submission.tiktokHandle : ''} />
+              <InfoRow label="Instagram" value={submission.instagramHandle ? '@' + submission.instagramHandle : ''} href={submission.instagramHandle ? `https://instagram.com/${submission.instagramHandle}` : undefined} />
+              <InfoRow label="TikTok" value={submission.tiktokHandle ? '@' + submission.tiktokHandle : ''} href={submission.tiktokHandle ? `https://tiktok.com/@${submission.tiktokHandle}` : undefined} />
               <InfoRow label="LinkedIn" value={submission.linkedinUrl?.url} link />
               <InfoRow label="YouTube" value={submission.youtubeUrl?.url} link />
               <InfoRow label="Other" value={submission.otherSocialLinks} />
@@ -204,13 +266,15 @@ function InfoCard({ icon: Icon, title, children, className }: {
   )
 }
 
-function InfoRow({ label, value, link }: { label: string; value?: string | null; link?: boolean }) {
+function InfoRow({ label, value, link, href }: { label: string; value?: string | null; link?: boolean; href?: string }) {
   if (!value) return null
+  const isLink = link || !!href
+  const url = href || value
   return (
     <div className="flex gap-2 text-sm">
       <span className="text-muted-foreground whitespace-nowrap">{label}:</span>
-      {link ? (
-        <a href={value} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 break-all">
+      {isLink ? (
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 break-all">
           {value} <ExternalLink className="w-3 h-3 flex-shrink-0" />
         </a>
       ) : (
