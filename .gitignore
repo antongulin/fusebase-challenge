@@ -16,3 +16,6 @@ mcp_example.json
 
 # Serena
 .serena/
+
+# IDE
+.idea/
