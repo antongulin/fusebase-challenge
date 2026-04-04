@@ -61,6 +61,11 @@ export default function AdminDetailPage() {
         body: JSON.stringify({ workspaceId: workspaceId.trim() }),
       })
       setSetupDone(true)
+      setSubmission((prev) => prev ? {
+        ...prev,
+        workspaceId: workspaceId.trim(),
+        status: [STATUS_LABELS.workspaceCreated],
+      } : prev)
     } catch {
       // error handled by apiFetch
     } finally {
@@ -301,14 +306,24 @@ function InfoCard({ icon: Icon, title, children, className }: {
   )
 }
 
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, 'https://placeholder.invalid')
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
 function InfoRow({ label, value, link, href }: { label: string; value?: string | null; link?: boolean; href?: string }) {
   if (!value) return null
   const isLink = link || !!href
   const url = href || value
+  const safeLink = isLink && isSafeUrl(url)
   return (
     <div className="flex gap-2 text-sm">
       <span className="text-muted-foreground whitespace-nowrap">{label}:</span>
-      {isLink ? (
+      {safeLink ? (
         <a href={url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 break-all">
           {value} <ExternalLink className="w-3 h-3 flex-shrink-0" />
         </a>
