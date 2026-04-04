@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import {
-  createDashboardDataApi,
+  createAdminDashboardDataApi,
   ONBOARDING_DASHBOARD_ID,
   ONBOARDING_VIEW_ID,
   COL,
@@ -11,11 +11,10 @@ export const submissionsRoutes = new Hono()
 
 // List all submissions
 submissionsRoutes.get('/', async (c) => {
-  const featureToken = c.get('featureToken' as never) as string
   const page = Number(c.req.query('page') || '1')
   const limit = Number(c.req.query('limit') || '50')
 
-  const dashboardApi = createDashboardDataApi(featureToken)
+  const dashboardApi = createAdminDashboardDataApi()
 
   try {
     const result = await dashboardApi.getDashboardViewData({
@@ -23,9 +22,23 @@ submissionsRoutes.get('/', async (c) => {
       query: { page, limit },
     })
 
-    const responseData = result.data as unknown as Record<string, unknown> | undefined
-    const rows = (responseData?.data as Array<Record<string, unknown>>) || []
-    const meta = responseData?.meta as Record<string, unknown> | undefined
+    // Handle both SDK shapes: direct array or { data: row[], meta } envelope
+    const rawData = result.data as unknown
+    let rows: Array<Record<string, unknown>>
+    let meta: Record<string, unknown> | undefined
+
+    if (Array.isArray(rawData)) {
+      rows = rawData as Array<Record<string, unknown>>
+      meta = undefined
+    } else if (rawData && typeof rawData === 'object' && 'data' in rawData) {
+      const envelope = rawData as { data: unknown[]; meta?: Record<string, unknown> }
+      rows = (envelope.data as Array<Record<string, unknown>>) ?? []
+      meta = envelope.meta
+    } else {
+      rows = []
+      meta = undefined
+    }
+    console.log(`[submissions] Fetched ${rows.length} rows`)
 
     const submissions = rows.map((row) => ({
       id: row.root_index_value as string,
@@ -66,14 +79,14 @@ submissionsRoutes.get('/', async (c) => {
 
     return c.json({ submissions, meta })
   } catch (err) {
-    console.error('Failed to fetch submissions:', err)
+    const errObj = err as { message?: string }
+    console.error(`[submissions] Failed to fetch: ${errObj.message}`)
     return c.json({ error: 'Failed to fetch submissions' }, 500)
   }
 })
 
 // Update submission (workspace association, status change)
 submissionsRoutes.post('/:id/setup', async (c) => {
-  const featureToken = c.get('featureToken' as never) as string
   const id = c.req.param('id')
   const body = await c.req.json<{ workspaceId: string; notes?: string }>()
 
@@ -81,7 +94,7 @@ submissionsRoutes.post('/:id/setup', async (c) => {
     return c.json({ error: 'workspaceId is required' }, 400)
   }
 
-  const dashboardApi = createDashboardDataApi(featureToken)
+  const dashboardApi = createAdminDashboardDataApi()
 
   try {
     await dashboardApi.batchPutDashboardData({
@@ -106,7 +119,6 @@ submissionsRoutes.post('/:id/setup', async (c) => {
 
 // Update submission status
 submissionsRoutes.post('/:id/status', async (c) => {
-  const featureToken = c.get('featureToken' as never) as string
   const id = c.req.param('id')
   const body = await c.req.json<{ status: keyof typeof STATUS_LABELS }>()
 
@@ -115,7 +127,7 @@ submissionsRoutes.post('/:id/status', async (c) => {
     return c.json({ error: 'Invalid status' }, 400)
   }
 
-  const dashboardApi = createDashboardDataApi(featureToken)
+  const dashboardApi = createAdminDashboardDataApi()
 
   try {
     await dashboardApi.batchPutDashboardData({

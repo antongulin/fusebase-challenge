@@ -26,15 +26,13 @@
       },
       "fusebaseGateMeta": {
         "sdkVersion": "2.2.2-sdk.16",
-        "analyzedAt": "2026-04-04T03:12:51.976Z",
-        "usedOpsChangedAt": "2026-04-04T03:12:51.976Z",
-        "permissionsChangedAt": "2026-04-04T03:12:51.978Z",
+        "analyzedAt": "2026-04-04T06:16:59.793Z",
+        "usedOpsChangedAt": "2026-04-04T06:15:21.413Z",
+        "permissionsChangedAt": "2026-04-04T06:15:21.415Z",
         "usedOps": [
-          "addOrgUser",
-          "sendOrgEmail"
+          "addOrgUser"
         ],
         "permissions": [
-          "email.write",
           "org.members.write"
         ]
       }

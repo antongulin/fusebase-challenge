@@ -19,6 +19,22 @@ export function createDashboardDataApi(featureToken: string): DashboardDataApi {
   return new DashboardDataApi(client)
 }
 
+/**
+ * Create a DashboardDataApi using a service token (Authorization: Bearer).
+ * Visitor feature tokens cannot read dashboard data; this uses a service token for admin reads.
+ */
+export function createAdminDashboardDataApi(): DashboardDataApi {
+  const serviceToken = process.env.DASHBOARD_SERVICE_TOKEN
+  if (!serviceToken) {
+    throw new Error('DASHBOARD_SERVICE_TOKEN not configured')
+  }
+  const client = createClient({
+    baseUrl: DASHBOARD_BASE_URL,
+    defaultHeaders: { 'Authorization': `Bearer ${serviceToken}` },
+  })
+  return new DashboardDataApi(client)
+}
+
 export function createOrgUsersApi(featureToken: string): OrgUsersApi {
   const client = createGateClient({
     baseUrl: GATE_BASE_URL,

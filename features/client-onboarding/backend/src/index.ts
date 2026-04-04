@@ -9,10 +9,14 @@ const app = new Hono().basePath('/api')
 
 app.use('*', cors())
 
+app.get('/health', (c) => c.json({ ok: true }))
+
 // Auth middleware: extract feature token
 app.use('*', async (c, next) => {
   const featureToken =
     c.req.header('x-app-feature-token') || getCookie(c, 'fbsfeaturetoken')
+
+  console.log(`[${c.req.method}] ${c.req.path} — token: ${featureToken ? 'present' : 'MISSING'}`)
 
   if (!featureToken) {
     return c.json({ error: 'Missing feature token' }, 401)
@@ -21,8 +25,6 @@ app.use('*', async (c, next) => {
   c.set('featureToken' as never, featureToken as never)
   await next()
 })
-
-app.get('/health', (c) => c.json({ ok: true }))
 
 app.route('/onboard', onboardRoutes)
 app.route('/submissions', submissionsRoutes)
