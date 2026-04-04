@@ -2,12 +2,52 @@ import { Hono } from 'hono'
 import textlink from 'textlink-sms'
 import { Resend } from 'resend'
 
-function formatPhone(phone: string): string {
-  const digits = phone.replace(/[^+\d]/g, '')
-  if (digits.startsWith('+')) return digits
-  if (digits.length === 10) return '+1' + digits
-  if (digits.length === 11 && digits.startsWith('1')) return '+' + digits
-  return '+' + digits
+function formatPhone(phone: string): string | null {
+  const hasLeadingPlus = phone.trim().startsWith('+')
+  const digits = phone.replace(/\D/g, '')
+
+  let formatted: string | null = null
+  if (hasLeadingPlus) {
+    formatted = '+' + digits
+  } else if (digits.length === 10) {
+    formatted = '+1' + digits
+  } else if (digits.length === 11 && digits.startsWith('1')) {
+    formatted = '+' + digits
+  }
+
+  if (formatted) {
+    const e164Digits = formatted.slice(1)
+    if (e164Digits.length >= 10 && e164Digits.length <= 15) return formatted
+  }
+  return null
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function getSafeHttpUrl(value: string): string | null {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function buildSafeLink(urlValue: string, label?: string): string {
+  const safeUrl = getSafeHttpUrl(urlValue)
+  if (!safeUrl) return escapeHtml(label ?? urlValue)
+  return `<a href="${escapeHtml(safeUrl)}" style="color:#2563EB;text-decoration:none;">${escapeHtml(label ?? urlValue)}</a>`
+}
+
+function sanitizeSubject(value: string): string {
+  return value.replace(/[\r\n\t]/g, ' ').trim()
 }
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Boost Business AI <onboarding@resend.dev>'
@@ -33,14 +73,37 @@ import {
 
 function buildOwnerNotificationHtml(body: OnboardBody): string {
   const socialLinks: string[] = []
-  if (body.websiteUrl) socialLinks.push(`<a href="${body.websiteUrl}" style="color:#2563EB;text-decoration:none;">${body.websiteUrl}</a>`)
-  if (body.gbpUrl) socialLinks.push(`<a href="${body.gbpUrl}" style="color:#2563EB;text-decoration:none;">Google Business Profile</a>`)
-  if (body.facebookUrl) socialLinks.push(`<a href="${body.facebookUrl}" style="color:#2563EB;text-decoration:none;">Facebook</a>`)
-  if (body.instagramHandle) socialLinks.push(`Instagram: ${body.instagramHandle}`)
-  if (body.tiktokHandle) socialLinks.push(`TikTok: ${body.tiktokHandle}`)
-  if (body.linkedinUrl) socialLinks.push(`<a href="${body.linkedinUrl}" style="color:#2563EB;text-decoration:none;">LinkedIn</a>`)
-  if (body.youtubeUrl) socialLinks.push(`<a href="${body.youtubeUrl}" style="color:#2563EB;text-decoration:none;">YouTube</a>`)
-  if (body.otherSocialLinks) socialLinks.push(body.otherSocialLinks)
+  if (body.websiteUrl) socialLinks.push(buildSafeLink(body.websiteUrl))
+  if (body.gbpUrl) socialLinks.push(buildSafeLink(body.gbpUrl, 'Google Business Profile'))
+  if (body.facebookUrl) socialLinks.push(buildSafeLink(body.facebookUrl, 'Facebook'))
+  if (body.instagramHandle) socialLinks.push(`Instagram: ${escapeHtml(body.instagramHandle)}`)
+  if (body.tiktokHandle) socialLinks.push(`TikTok: ${escapeHtml(body.tiktokHandle)}`)
+  if (body.linkedinUrl) socialLinks.push(buildSafeLink(body.linkedinUrl, 'LinkedIn'))
+  if (body.youtubeUrl) socialLinks.push(buildSafeLink(body.youtubeUrl, 'YouTube'))
+  if (body.otherSocialLinks) socialLinks.push(escapeHtml(body.otherSocialLinks))
+
+  const safe = {
+    companyName: escapeHtml(body.companyName || ''),
+    contactName: escapeHtml(body.contactName || ''),
+    contactEmail: escapeHtml(body.contactEmail || ''),
+    contactPhone: escapeHtml(body.contactPhone || ''),
+    contactRole: escapeHtml(body.contactRole || ''),
+    industry: escapeHtml(body.industry || ''),
+    businessAddress: escapeHtml(body.businessAddress || ''),
+    differentiator: escapeHtml(body.differentiator || ''),
+    services: (Array.isArray(body.servicesOffered) ? body.servicesOffered : []).map(escapeHtml).join(', '),
+    topServices: (Array.isArray(body.topServices) ? body.topServices : []).map(escapeHtml).join(', '),
+    primaryGoal: escapeHtml(body.primaryGoal || ''),
+    monthlyBudget: escapeHtml(body.monthlyBudget || ''),
+    serviceArea: escapeHtml(body.serviceArea || ''),
+    idealCustomer: escapeHtml(body.idealCustomer || ''),
+    competitors: escapeHtml(body.competitors || ''),
+    specialOffers: escapeHtml(body.specialOffers || ''),
+    employeeRange: escapeHtml(body.employeeRange || ''),
+    contactMethod: (Array.isArray(body.contactMethod) ? body.contactMethod : []).map(escapeHtml).join(', '),
+    bestTime: escapeHtml(body.bestTime || ''),
+    additionalNotes: escapeHtml(body.additionalNotes || ''),
+  }
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -63,8 +126,8 @@ function buildOwnerNotificationHtml(body: OnboardBody): string {
 
 <!-- Company Header -->
 <tr><td style="background-color:#ffffff;padding:28px 32px 20px;border-bottom:1px solid #e5e7eb;">
-  <div style="font-size:24px;font-weight:700;color:#1a1a1a;margin:0 0 4px;">${body.companyName}</div>
-  <div style="font-size:15px;color:#6b7280;">${body.industry}${body.businessAddress ? ' &middot; ' + body.businessAddress : ''}</div>
+  <div style="font-size:24px;font-weight:700;color:#1a1a1a;margin:0 0 4px;">${safe.companyName}</div>
+  <div style="font-size:15px;color:#6b7280;">${safe.industry}${safe.businessAddress ? ' &middot; ' + safe.businessAddress : ''}</div>
 </td></tr>
 
 <!-- Contact Info -->
@@ -72,14 +135,14 @@ function buildOwnerNotificationHtml(body: OnboardBody): string {
   <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:12px;">Contact</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
   <tr>
-    <td style="padding-bottom:6px;color:#1a1a1a;font-size:15px;width:50%;"><strong>${body.contactName}</strong>${body.contactRole ? ' &middot; ' + body.contactRole : ''}</td>
+    <td style="padding-bottom:6px;color:#1a1a1a;font-size:15px;width:50%;"><strong>${safe.contactName}</strong>${safe.contactRole ? ' &middot; ' + safe.contactRole : ''}</td>
   </tr>
   <tr>
     <td style="padding-bottom:4px;">
-      <a href="mailto:${body.contactEmail}" style="color:#2563EB;text-decoration:none;font-size:14px;">${body.contactEmail}</a>
+      <a href="mailto:${safe.contactEmail}" style="color:#2563EB;text-decoration:none;font-size:14px;">${safe.contactEmail}</a>
     </td>
   </tr>
-  ${body.contactPhone ? `<tr><td style="padding-bottom:4px;"><a href="tel:${body.contactPhone}" style="color:#2563EB;text-decoration:none;font-size:14px;">${body.contactPhone}</a></td></tr>` : ''}
+  ${safe.contactPhone ? `<tr><td style="padding-bottom:4px;"><a href="tel:${safe.contactPhone}" style="color:#2563EB;text-decoration:none;font-size:14px;">${safe.contactPhone}</a></td></tr>` : ''}
   </table>
 </td></tr>
 
@@ -87,13 +150,13 @@ function buildOwnerNotificationHtml(body: OnboardBody): string {
 <tr><td style="background-color:#ffffff;padding:20px 32px;border-bottom:1px solid #e5e7eb;">
   <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:12px;">Services &amp; Goals</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px;color:#1a1a1a;">
-  <tr><td style="padding:4px 0;color:#6b7280;width:140px;vertical-align:top;">Services</td><td style="padding:4px 0;">${body.servicesOffered.join(', ')}</td></tr>
-  ${body.topServices?.length ? `<tr><td style="padding:4px 0;color:#6b7280;vertical-align:top;">Top Services</td><td style="padding:4px 0;">${body.topServices.join(', ')}</td></tr>` : ''}
-  <tr><td style="padding:4px 0;color:#6b7280;">Primary Goal</td><td style="padding:4px 0;font-weight:600;">${body.primaryGoal}</td></tr>
-  <tr><td style="padding:4px 0;color:#6b7280;">Budget</td><td style="padding:4px 0;font-weight:600;">${body.monthlyBudget}</td></tr>
+  <tr><td style="padding:4px 0;color:#6b7280;width:140px;vertical-align:top;">Services</td><td style="padding:4px 0;">${safe.services}</td></tr>
+  ${safe.topServices ? `<tr><td style="padding:4px 0;color:#6b7280;vertical-align:top;">Top Services</td><td style="padding:4px 0;">${safe.topServices}</td></tr>` : ''}
+  <tr><td style="padding:4px 0;color:#6b7280;">Primary Goal</td><td style="padding:4px 0;font-weight:600;">${safe.primaryGoal}</td></tr>
+  <tr><td style="padding:4px 0;color:#6b7280;">Budget</td><td style="padding:4px 0;font-weight:600;">${safe.monthlyBudget}</td></tr>
   ${body.emergencyService ? '<tr><td style="padding:4px 0;color:#6b7280;">Emergency</td><td style="padding:4px 0;">Yes - offers emergency service</td></tr>' : ''}
   ${body.freeEstimates ? '<tr><td style="padding:4px 0;color:#6b7280;">Free Estimates</td><td style="padding:4px 0;">Yes</td></tr>' : ''}
-  ${body.employeeRange ? `<tr><td style="padding:4px 0;color:#6b7280;">Team Size</td><td style="padding:4px 0;">${body.employeeRange}</td></tr>` : ''}
+  ${safe.employeeRange ? `<tr><td style="padding:4px 0;color:#6b7280;">Team Size</td><td style="padding:4px 0;">${safe.employeeRange}</td></tr>` : ''}
   </table>
 </td></tr>
 
@@ -101,34 +164,34 @@ function buildOwnerNotificationHtml(body: OnboardBody): string {
 <tr><td style="background-color:#ffffff;padding:20px 32px;border-bottom:1px solid #e5e7eb;">
   <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:12px;">Market &amp; Positioning</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px;color:#1a1a1a;">
-  ${body.serviceArea ? `<tr><td style="padding:4px 0;color:#6b7280;width:140px;vertical-align:top;">Service Area</td><td style="padding:4px 0;">${body.serviceArea}</td></tr>` : ''}
-  ${body.idealCustomer ? `<tr><td style="padding:4px 0;color:#6b7280;vertical-align:top;">Ideal Customer</td><td style="padding:4px 0;">${body.idealCustomer}</td></tr>` : ''}
-  ${body.competitors ? `<tr><td style="padding:4px 0;color:#6b7280;vertical-align:top;">Competitors</td><td style="padding:4px 0;">${body.competitors}</td></tr>` : ''}
+  ${safe.serviceArea ? `<tr><td style="padding:4px 0;color:#6b7280;width:140px;vertical-align:top;">Service Area</td><td style="padding:4px 0;">${safe.serviceArea}</td></tr>` : ''}
+  ${safe.idealCustomer ? `<tr><td style="padding:4px 0;color:#6b7280;vertical-align:top;">Ideal Customer</td><td style="padding:4px 0;">${safe.idealCustomer}</td></tr>` : ''}
+  ${safe.competitors ? `<tr><td style="padding:4px 0;color:#6b7280;vertical-align:top;">Competitors</td><td style="padding:4px 0;">${safe.competitors}</td></tr>` : ''}
   </table>
-  ${body.differentiator ? `<div style="margin-top:12px;padding:12px 16px;background-color:#f0f7ff;border-left:3px solid #2563EB;border-radius:0 4px 4px 0;font-size:14px;color:#1a1a1a;line-height:1.5;font-style:italic;">"${body.differentiator}"</div>` : ''}
+  ${safe.differentiator ? `<div style="margin-top:12px;padding:12px 16px;background-color:#f0f7ff;border-left:3px solid #2563EB;border-radius:0 4px 4px 0;font-size:14px;color:#1a1a1a;line-height:1.5;font-style:italic;">"${safe.differentiator}"</div>` : ''}
 </td></tr>
 
 <!-- Online Presence -->
 ${socialLinks.length || body.specialOffers ? `<tr><td style="background-color:#ffffff;padding:20px 32px;border-bottom:1px solid #e5e7eb;">
   <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:12px;">Online Presence</div>
   ${socialLinks.length ? `<div style="font-size:14px;line-height:1.8;">${socialLinks.join(' &nbsp;&middot;&nbsp; ')}</div>` : ''}
-  ${body.specialOffers ? `<div style="margin-top:10px;font-size:14px;"><span style="color:#6b7280;">Current Offers:</span> ${body.specialOffers}</div>` : ''}
+  ${safe.specialOffers ? `<div style="margin-top:10px;font-size:14px;"><span style="color:#6b7280;">Current Offers:</span> ${safe.specialOffers}</div>` : ''}
 </td></tr>` : ''}
 
 <!-- Communication Preferences & Notes -->
 <tr><td style="background-color:#ffffff;padding:20px 32px;border-bottom:1px solid #e5e7eb;">
   <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:12px;">Communication</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px;color:#1a1a1a;">
-  ${body.contactMethod?.length ? `<tr><td style="padding:4px 0;color:#6b7280;width:140px;">Preferred</td><td style="padding:4px 0;">${body.contactMethod.join(', ')}</td></tr>` : ''}
-  ${body.bestTime ? `<tr><td style="padding:4px 0;color:#6b7280;">Best Time</td><td style="padding:4px 0;">${body.bestTime}</td></tr>` : ''}
+  ${safe.contactMethod ? `<tr><td style="padding:4px 0;color:#6b7280;width:140px;">Preferred</td><td style="padding:4px 0;">${safe.contactMethod}</td></tr>` : ''}
+  ${safe.bestTime ? `<tr><td style="padding:4px 0;color:#6b7280;">Best Time</td><td style="padding:4px 0;">${safe.bestTime}</td></tr>` : ''}
   </table>
-  ${body.additionalNotes ? `<div style="margin-top:12px;padding:12px 16px;background-color:#f9fafb;border-radius:6px;font-size:14px;color:#1a1a1a;line-height:1.5;"><span style="color:#6b7280;font-weight:600;">Notes:</span> ${body.additionalNotes}</div>` : ''}
+  ${safe.additionalNotes ? `<div style="margin-top:12px;padding:12px 16px;background-color:#f9fafb;border-radius:6px;font-size:14px;color:#1a1a1a;line-height:1.5;"><span style="color:#6b7280;font-weight:600;">Notes:</span> ${safe.additionalNotes}</div>` : ''}
 </td></tr>
 
 <!-- CTA -->
 <tr><td style="background-color:#ffffff;padding:28px 32px;border-radius:0 0 8px 8px;" align="center">
   <a href="https://thefusebase.com" style="display:inline-block;background-color:#2563EB;color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:6px;letter-spacing:-0.2px;">Review and Create Workspace</a>
-  <div style="margin-top:12px;font-size:13px;color:#6b7280;">Submission ID: ${body.companyName.toLowerCase().replace(/\s+/g, '-')}-${Date.now().toString(36)}</div>
+  <div style="margin-top:12px;font-size:13px;color:#6b7280;">Submission ID: ${safe.companyName.toLowerCase().replace(/\s+/g, '-')}-${Date.now().toString(36)}</div>
 </td></tr>
 
 <!-- Footer -->
@@ -145,7 +208,8 @@ ${socialLinks.length || body.specialOffers ? `<tr><td style="background-color:#f
 }
 
 function buildClientWelcomeHtml(body: OnboardBody): string {
-  const firstName = body.contactName.split(' ')[0]
+  const firstName = escapeHtml((body.contactName || '').split(' ')[0] || 'there')
+  const companyName = escapeHtml(body.companyName || '')
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -184,7 +248,7 @@ function buildClientWelcomeHtml(body: OnboardBody): string {
 <!-- Body Copy -->
 <tr><td style="padding:24px 40px 0;">
   <p style="margin:0 0 16px;font-size:16px;line-height:1.65;color:#1a1a1a;">
-    You made a great decision. Your onboarding is complete, and your dedicated strategist is already digging into your market, your competitors, and the opportunities specific to ${body.companyName}.
+    You made a great decision. Your onboarding is complete, and your dedicated strategist is already digging into your market, your competitors, and the opportunities specific to ${companyName}.
   </p>
   <p style="margin:0;font-size:16px;line-height:1.65;color:#1a1a1a;">
     You do not need to do anything else right now. We have everything we need to get started. Here is exactly what happens next:
@@ -446,7 +510,7 @@ onboardRoutes.post('/', async (c) => {
       await resend.emails.send({
         from: FROM_EMAIL,
         to: 'anton@boostbusiness.ai',
-        subject: `New Client Onboarding: ${body.companyName} - ${body.industry} - ${body.businessAddress}`,
+        subject: sanitizeSubject(`New Client Onboarding: ${body.companyName} - ${body.industry} - ${body.businessAddress}`),
         html: buildOwnerNotificationHtml(body),
       })
       console.log('Notification email sent to anton@boostbusiness.ai')
@@ -466,6 +530,8 @@ onboardRoutes.post('/', async (c) => {
     } catch (err) {
       console.error('Failed to send welcome email:', err)
     }
+  } else {
+    console.log('RESEND_API_KEY not set, skipping emails')
   }
 
   // 6. Send SMS welcome to client (best-effort)
@@ -475,12 +541,17 @@ onboardRoutes.post('/', async (c) => {
       if (smsKey) {
         textlink.useKey(smsKey)
         const phone = formatPhone(body.contactPhone)
-        console.log('Sending SMS to:', phone)
-        const smsResult = await textlink.sendSMS(
-          phone,
-          `Welcome to Boost Business AI, ${body.contactName.split(' ')[0]}! We just sent you an email with your onboarding details. Your strategist will reach out within 48 hours.`
-        )
-        console.log('SMS result:', JSON.stringify(smsResult))
+        if (phone) {
+          const maskedPhone = phone.slice(0, -4).replace(/\d/g, '*') + phone.slice(-4)
+          console.log('Sending SMS to:', maskedPhone)
+          const smsResult = await textlink.sendSMS(
+            phone,
+            `Welcome to Boost Business AI, ${(body.contactName || '').split(' ')[0]}! We just sent you an email with your onboarding details. Your strategist will reach out within 48 hours.`
+          )
+          console.log('SMS result: ok =', smsResult?.ok, 'queued =', smsResult?.queued)
+        } else {
+          console.log('Skipping SMS: unable to normalize phone number to E.164')
+        }
       } else {
         console.log('TEXTLINK_API_KEY not set, skipping SMS')
       }

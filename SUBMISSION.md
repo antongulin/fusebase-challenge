@@ -31,7 +31,7 @@ All of that fires automatically from a single form submission. The backend (Hono
 
 - **Dashboards** + custom database (34 typed columns: labels, links, files, dates, booleans)
 - **Companies** managed database
-- **Gate** (OrgUsersApi for auto-invites, sendOrgEmail for notifications)
+- **Gate** (OrgUsersApi for auto-invites)
 - **MCP** for the entire development workflow (bootstrap, schema discovery, database/view creation, data operations)
 - **Feature backend** with secrets (Resend + TextLink API keys)
 - **Feature permissions** with Gate sync
