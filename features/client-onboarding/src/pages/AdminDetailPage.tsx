@@ -24,6 +24,7 @@ export default function AdminDetailPage() {
   const [submission, setSubmission] = useState<Submission | null>(null)
   const [loading, setLoading] = useState(true)
   const [workspaceId, setWorkspaceId] = useState('')
+  const [workspaces, setWorkspaces] = useState<{ id: string; title?: string | null; isDefault: boolean }[]>([])
   const [setupLoading, setSetupLoading] = useState(false)
   const [setupDone, setSetupDone] = useState(false)
   const [statusLoading, setStatusLoading] = useState(false)
@@ -39,6 +40,9 @@ export default function AdminDetailPage() {
         }
       })
       .finally(() => setLoading(false))
+    apiFetch<{ workspaces: { id: string; title?: string | null; isDefault: boolean }[] }>('/api/workspaces')
+      .then((data) => setWorkspaces(data.workspaces))
+      .catch(() => {})
   }, [id])
 
   const handleSetup = async () => {
@@ -213,34 +217,54 @@ export default function AdminDetailPage() {
         {/* Workspace Association */}
         {!setupDone && statusKey !== 'workspaceCreated' && statusKey !== 'active' && (
           <div className="mt-6 border border-primary/30 bg-primary/5 rounded-lg p-6">
-            <h3 className="font-semibold mb-2">Set Up Workspace</h3>
+            <h3 className="font-semibold mb-2">Associate Workspace</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Create a workspace for this client in Fusebase (just type the business name), then paste the workspace ID here.
+              Select an existing Fusebase workspace to associate with this client.
+              {workspaces.length === 0 && ' No workspaces found — create one in Fusebase first.'}
             </p>
             <div className="flex gap-3">
-              <input
-                type="text"
-                placeholder="Paste workspace ID..."
-                value={workspaceId}
-                onChange={(e) => setWorkspaceId(e.target.value)}
-                className="flex-1 px-3 py-2.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
+              {workspaces.length > 0 ? (
+                <select
+                  value={workspaceId}
+                  onChange={(e) => setWorkspaceId(e.target.value)}
+                  className="flex-1 px-3 py-2.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-background"
+                >
+                  <option value="">Select a workspace...</option>
+                  {workspaces.map((ws) => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.title || ws.id}{ws.isDefault ? ' (default)' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="Paste workspace ID..."
+                  value={workspaceId}
+                  onChange={(e) => setWorkspaceId(e.target.value)}
+                  className="flex-1 px-3 py-2.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              )}
               <button
                 onClick={handleSetup}
                 disabled={setupLoading || !workspaceId.trim()}
                 className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
               >
-                {setupLoading ? 'Saving...' : 'Associate Workspace'}
+                {setupLoading ? 'Saving...' : 'Associate'}
               </button>
             </div>
           </div>
         )}
 
         {(setupDone || statusKey === 'workspaceCreated' || statusKey === 'active') && (
-          <div className="mt-6 border border-success/30 bg-success/5 rounded-lg p-6">
-            <h3 className="font-semibold text-success mb-1">Workspace Associated</h3>
+          <div className="mt-6 border border-green-500/30 bg-green-500/5 rounded-lg p-6">
+            <h3 className="font-semibold text-green-700 mb-1">Workspace Associated</h3>
             <p className="text-sm text-muted-foreground">
-              Workspace ID: {workspaceId || submission.workspaceId}
+              {(() => {
+                const wsId = workspaceId || submission.workspaceId
+                const ws = workspaces.find((w) => w.id === wsId)
+                return ws ? `${ws.title || 'Untitled'} (${wsId})` : wsId
+              })()}
             </p>
           </div>
         )}

@@ -4,6 +4,7 @@ import { getCookie } from 'hono/cookie'
 import { cors } from 'hono/cors'
 import { onboardRoutes } from './routes/onboard.js'
 import { submissionsRoutes } from './routes/submissions.js'
+import { createAdminWorkspacesApi, ORG_ID } from './sdk.js'
 
 const app = new Hono().basePath('/api')
 
@@ -28,6 +29,21 @@ app.use('*', async (c, next) => {
 
 app.route('/onboard', onboardRoutes)
 app.route('/submissions', submissionsRoutes)
+
+// List org workspaces for admin dropdown
+app.get('/workspaces', async (c) => {
+  try {
+    const workspacesApi = createAdminWorkspacesApi()
+    const result = await workspacesApi.listWorkspaces({
+      path: { orgId: ORG_ID },
+    })
+    return c.json({ workspaces: result.workspaces ?? [] })
+  } catch (err) {
+    const errObj = err as { message?: string }
+    console.error(`[workspaces] Failed to list: ${errObj.message}`)
+    return c.json({ workspaces: [] })
+  }
+})
 
 const port = Number(process.env.BACKEND_PORT) || 3001
 
