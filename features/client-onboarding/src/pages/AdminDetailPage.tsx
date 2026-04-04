@@ -10,13 +10,18 @@ const STATUS_NAME: Record<string, string> = Object.fromEntries(
   Object.entries(STATUS_LABELS).map(([key, nanoid]) => [nanoid, key])
 )
 
-const STATUS_OPTIONS: { key: string; label: string }[] = [
-  { key: 'new', label: 'New' },
-  { key: 'underReview', label: 'Under Review' },
-  { key: 'workspaceCreated', label: 'Workspace Created' },
-  { key: 'active', label: 'Active' },
-  { key: 'rejected', label: 'Rejected' },
-]
+const STATUS_DISPLAY: Record<string, string> = {
+  new: 'New',
+  underReview: 'Under Review',
+  workspaceCreated: 'Workspace Created',
+  active: 'Active',
+  rejected: 'Rejected',
+}
+
+const STATUS_OPTIONS = Object.keys(STATUS_LABELS).map((key) => ({
+  key,
+  label: STATUS_DISPLAY[key] || key,
+}))
 
 export default function AdminDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -25,6 +30,7 @@ export default function AdminDetailPage() {
   const [loading, setLoading] = useState(true)
   const [workspaceId, setWorkspaceId] = useState('')
   const [workspaces, setWorkspaces] = useState<{ id: string; title?: string | null; isDefault: boolean }[]>([])
+  const [workspacesLoaded, setWorkspacesLoaded] = useState(false)
   const [setupLoading, setSetupLoading] = useState(false)
   const [setupDone, setSetupDone] = useState(false)
   const [statusLoading, setStatusLoading] = useState(false)
@@ -43,6 +49,7 @@ export default function AdminDetailPage() {
     apiFetch<{ workspaces: { id: string; title?: string | null; isDefault: boolean }[] }>('/api/submissions/workspaces')
       .then((data) => setWorkspaces(data.workspaces))
       .catch((err) => console.error('Failed to load workspaces:', err))
+      .finally(() => setWorkspacesLoaded(true))
   }, [id])
 
   const handleSetup = async () => {
@@ -222,11 +229,13 @@ export default function AdminDetailPage() {
             <h3 className="font-semibold mb-2">Associate Workspace</h3>
             <p className="text-sm text-muted-foreground mb-4">
               Select an existing Fusebase workspace to associate with this client.
-              {workspaces.length === 0 && ' No workspaces found — create one in Fusebase first.'}
+              {workspacesLoaded && workspaces.length === 0 && ' No workspaces found — create one in Fusebase first.'}
+              {!workspacesLoaded && ' Loading workspaces...'}
             </p>
             <div className="flex gap-3">
               {workspaces.length > 0 ? (
                 <select
+                  aria-label="Select workspace"
                   value={workspaceId}
                   onChange={(e) => setWorkspaceId(e.target.value)}
                   className="flex-1 px-3 py-2.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-background"
