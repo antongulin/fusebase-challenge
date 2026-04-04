@@ -42,7 +42,7 @@ export default function AdminDetailPage() {
       .finally(() => setLoading(false))
     apiFetch<{ workspaces: { id: string; title?: string | null; isDefault: boolean }[] }>('/api/submissions/workspaces')
       .then((data) => setWorkspaces(data.workspaces))
-      .catch(() => {})
+      .catch((err) => console.error('Failed to load workspaces:', err))
   }, [id])
 
   const handleSetup = async () => {
