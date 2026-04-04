@@ -2,8 +2,10 @@ import { Hono } from 'hono'
 import {
   createAdminDashboardDataApi,
   createAdminRowsApi,
+  createAdminWorkspacesApi,
   ONBOARDING_DASHBOARD_ID,
   ONBOARDING_VIEW_ID,
+  ORG_ID,
   COL,
   STATUS_LABELS,
 } from '../sdk.js'
@@ -165,5 +167,19 @@ submissionsRoutes.delete('/:id', async (c) => {
   } catch (err) {
     console.error('[submissions] Failed to delete submission:', err)
     return c.json({ error: 'Failed to delete submission' }, 500)
+  }
+})
+
+// List org workspaces for admin dropdown
+submissionsRoutes.get('/workspaces', async (c) => {
+  try {
+    const workspacesApi = createAdminWorkspacesApi()
+    const result = await workspacesApi.listWorkspaces({
+      path: { orgId: ORG_ID },
+    })
+    return c.json({ workspaces: result.workspaces ?? [] })
+  } catch (err) {
+    console.error('[workspaces] Failed to list:', err)
+    return c.json({ error: 'Failed to list workspaces' }, 500)
   }
 })

@@ -40,7 +40,7 @@ export default function AdminDetailPage() {
         }
       })
       .finally(() => setLoading(false))
-    apiFetch<{ workspaces: { id: string; title?: string | null; isDefault: boolean }[] }>('/api/workspaces')
+    apiFetch<{ workspaces: { id: string; title?: string | null; isDefault: boolean }[] }>('/api/submissions/workspaces')
       .then((data) => setWorkspaces(data.workspaces))
       .catch(() => {})
   }, [id])
@@ -128,6 +128,7 @@ export default function AdminDetailPage() {
           </div>
           <div className="flex items-center gap-3">
             <select
+              aria-label="Submission status"
               value={statusKey}
               onChange={(e) => handleStatusChange(e.target.value)}
               disabled={statusLoading}
@@ -150,6 +151,7 @@ export default function AdminDetailPage() {
               onClick={handleDelete}
               disabled={deleteLoading}
               className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Delete submission"
               title="Delete submission"
             >
               <Trash2 className="w-4 h-4" />
